@@ -318,7 +318,9 @@ void Table::pagerank() {
         sum_pr = 0;
         dangling_pr = 0;
         
-        for (size_t k = 0; k < pr.size(); k++) {
+        int pr_size = pr.size();
+        #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
+        for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
@@ -330,7 +332,8 @@ void Table::pagerank() {
             old_pr = pr;
         } else {
             /* Normalize so that we start with sum equal to one */
-            for (i = 0; i < pr.size(); i++) {
+            #pragma ivdep
+            for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
             }
         }
@@ -357,9 +360,9 @@ void Table::pagerank() {
                 double h_v = (num_outgoing[*ci])
                     ? 1.0 / num_outgoing[*ci]
                     : 0.0;
-                if (num_iterations == 0 && trace) {
-                    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
-                }
+                //if (num_iterations == 0 && trace) {
+                //    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
+                //}
                 h += h_v * old_pr[*ci];
             }
             h *= alpha;
@@ -367,10 +370,10 @@ void Table::pagerank() {
             diff += fabs(pr[i] - old_pr[i]);
         }
         num_iterations++;
-        if (trace) {
-            cout << num_iterations << ": ";
-            print_pagerank();
-        }
+        //if (trace) {
+        //    cout << num_iterations << ": ";
+        //    print_pagerank();
+        //}
     }
     
 }
