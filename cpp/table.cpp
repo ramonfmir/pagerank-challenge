@@ -42,6 +42,7 @@
 #include <string>
 #include <cstring>
 #include <limits>
+#include <cstddef>
 
 #include "table.h"
 
@@ -67,7 +68,7 @@ void Table::reserve(size_t size) {
     rows.reserve(size);
 }
 
-const size_t Table::get_num_rows() {
+size_t Table::get_num_rows() {
     return rows.size();
 }
 
@@ -76,12 +77,12 @@ void Table::set_num_rows(size_t num_rows) {
     rows.resize(num_rows);
 }
 
-const void Table::error(const char *p,const char *p2) {
+void Table::error(const char *p,const char *p2) {
     cerr << p <<  ' ' << p2 <<  '\n';
     exit(1);
 }
 
-const double Table::get_alpha() {
+double Table::get_alpha() {
     return alpha;
 }
 
@@ -89,7 +90,7 @@ void Table::set_alpha(double a) {
     alpha = a;
 }
 
-const unsigned long Table::get_max_iterations() {
+unsigned long Table::get_max_iterations() {
     return max_iterations;
 }
 
@@ -97,7 +98,7 @@ void Table::set_max_iterations(unsigned long i) {
     max_iterations = i;
 }
 
-const double Table::get_convergence() {
+double Table::get_convergence() {
     return convergence;
 }
 
@@ -105,11 +106,11 @@ void Table::set_convergence(double c) {
     convergence = c;
 }
 
-const vector<double>& Table::get_pagerank() {
+vector<double>& Table::get_pagerank() {
     return pr;
 }
 
-const string Table::get_node_name(size_t index) {
+string Table::get_node_name(size_t index) {
     if (numeric) {
         stringstream s;
         s << index;
@@ -119,11 +120,11 @@ const string Table::get_node_name(size_t index) {
     }
 }
 
-const map<size_t, string>& Table::get_mapping() {
+map<size_t, string>& Table::get_mapping() {
     return idx_to_nodes;
 }
 
-const bool Table::get_trace() {
+bool Table::get_trace() {
     return trace;
 }
 
@@ -131,7 +132,7 @@ void Table::set_trace(bool t) {
     trace = t;
 }
 
-const bool Table::get_numeric() {
+bool Table::get_numeric() {
     return numeric;
 }
 
@@ -139,7 +140,7 @@ void Table::set_numeric(bool n) {
     numeric = n;
 }
 
-const string Table::get_delim() {
+string Table::get_delim() {
     return delim;
 }
 
@@ -293,6 +294,7 @@ void Table::pagerank() {
     vector<size_t>::iterator ci; // current incoming
     double diff = 1;
     size_t i;
+    size_t ii;
     double sum_pr; // sum of current pagerank vector elements
     double dangling_pr; // sum of current pagerank vector elements for dangling
     			// nodes
@@ -318,7 +320,10 @@ void Table::pagerank() {
         sum_pr = 0;
         dangling_pr = 0;
         
-        for (size_t k = 0; k < pr.size(); k++) {
+        int pr_size = pr.size();
+        #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
+        #pragma ivdep
+        for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
@@ -330,7 +335,9 @@ void Table::pagerank() {
             old_pr = pr;
         } else {
             /* Normalize so that we start with sum equal to one */
-            for (i = 0; i < pr.size(); i++) {
+            #pragma omp parallel for
+            #pragma ivdep
+            for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
             }
         }
@@ -349,40 +356,54 @@ void Table::pagerank() {
 
         /* The difference to be checked for convergence */
         diff = 0;
+        int threads = 1;
+        int block = num_rows / threads;
+        int iii;
+        double h;
+        #pragma omp parallel for private(i, ci, iii, h) reduction(+: diff)
         for (i = 0; i < num_rows; i++) {
+          //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
             /* The corresponding element of the H multiplication */
-            double h = 0.0;
-            for (ci = rows[i].begin(); ci != rows[i].end(); ci++) {
+            h = 0.0;
+            std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
+            ci = rows[i].begin();
+            #pragma ivdep
+            for (iii = 0; iii < ptr_diff; iii++) {
                 /* The current element of the H vector */
-                double h_v = (num_outgoing[*ci])
-                    ? 1.0 / num_outgoing[*ci]
+                int outgoing = num_outgoing[*(ci + iii)];
+                double h_v = (outgoing)
+                    ? 1.0 / outgoing
                     : 0.0;
-                if (num_iterations == 0 && trace) {
-                    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
-                }
-                h += h_v * old_pr[*ci];
+                //if (num_iterations == 0 && trace) {
+                //    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
+                //}
+                h += h_v * old_pr[*(ci + iii)];
             }
             h *= alpha;
             pr[i] = h + one_Av + one_Iv;
             diff += fabs(pr[i] - old_pr[i]);
+          //}
         }
+
+
+
         num_iterations++;
-        if (trace) {
-            cout << num_iterations << ": ";
-            print_pagerank();
-        }
+        //if (trace) {
+        //    cout << num_iterations << ": ";
+        //    print_pagerank();
+        //}
     }
     
 }
 
-const void Table::print_params(ostream& out) {
+void Table::print_params(ostream& out) {
     out << "alpha = " << alpha << " convergence = " << convergence
         << " max_iterations = " << max_iterations
         << " numeric = " << numeric
         << " delimiter = '" << delim << "'" << endl;
 }
 
-const void Table::print_table() {
+void Table::print_table() {
     vector< vector<size_t> >::iterator cr;
     vector<size_t>::iterator cc; // current column
 
@@ -401,7 +422,7 @@ const void Table::print_table() {
     }
 }
 
-const void Table::print_outgoing() {
+void Table::print_outgoing() {
     vector<size_t>::iterator cn;
 
     cout << "[ ";
@@ -412,7 +433,7 @@ const void Table::print_outgoing() {
 
 }
 
-const void Table::print_pagerank() {
+void Table::print_pagerank() {
 
     vector<double>::iterator cr;
     double sum = 0;
@@ -428,7 +449,7 @@ const void Table::print_pagerank() {
     cout << "] "<< sum << endl;
 }
 
-const void Table::print_pagerank_v() {
+void Table::print_pagerank_v() {
 
     size_t i;
     size_t num_rows = pr.size();

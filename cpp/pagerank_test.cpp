@@ -44,7 +44,8 @@
 #include <dirent.h>
 
 // Paul Kelly: for exercise
-#include <time.h>
+//#include <time.h>
+#include <sys/time.h> 
 
 #include "table.h"
 
@@ -128,10 +129,16 @@ int main(int argc, char *argv[]) {
         t.set_trace(false);
         t.read_file(graph_filename);
         /* Calculate pagerank */
-	long startTime = clock();
+	struct timeval start, end;
+	long secs_used,micros_used;
+	gettimeofday(&start, NULL);
         t.pagerank();
-	long endTime = clock();
-	cout << "Pagerank time(s): " << (float(endTime-startTime))/CLOCKS_PER_SEC << endl;
+	gettimeofday(&end, NULL);
+
+	secs_used=end.tv_sec - start.tv_sec; 
+	micros_used= ((secs_used*1000000) + end.tv_usec) - (start.tv_usec);
+
+	cout << "Pagerank time(s): " << ((float)micros_used)/1000000.0f << endl;
 
         /* Read pagerank test results file */
         vector<double> pagerank_test_values;

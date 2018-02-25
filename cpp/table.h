@@ -119,14 +119,14 @@ public:
     /*
      * Returns the number of rows of the link matrix.
      */
-    const size_t get_num_rows();
+    size_t get_num_rows();
 
     /*
      * Sets the number of rows of the link matrix.
      */
     void set_num_rows(size_t num_rows);
 
-    const void error(const char *p,const char *p2 = "");
+    void error(const char *p,const char *p2 = "");
 
     /*
      * Reads the graph described in filename.
@@ -141,7 +141,7 @@ public:
     /*
      * Returns the pagerank vector of the hyperlink matrix.
      */
-    const vector<double>& get_pagerank();
+    vector<double>& get_pagerank();
 
     /*
      * Returns the name of the node with the given index. If the nodes are
@@ -149,14 +149,14 @@ public:
      * nodes are not numeric, the name is the original node name as it was
      * input from read_file(string&)
      */
-    const string get_node_name(size_t index);
+    string get_node_name(size_t index);
 
-    const map<size_t, string>& get_mapping();
+    map<size_t, string>& get_mapping();
     
     /*
      * Returns the pagerank damping factor.
      */
-    const double get_alpha();
+    double get_alpha();
 
     /*
      * Sets the pagerank damping factor.
@@ -167,7 +167,7 @@ public:
      * Returns the maximum number of iterations that the pagerank algorithm
      * will perform.
      */
-    const unsigned long get_max_iterations();
+    unsigned long get_max_iterations();
 
     /*
      * Sets the maximum number of iterations that the pagerank algorithm
@@ -179,7 +179,7 @@ public:
      * Returns the value that is used to determine convergence of the
      * pagerank calculation algorithm.
      */
-    const double get_convergence();
+    double get_convergence();
 
     /*
      * Sets the value that is used to determine convergence of the
@@ -190,7 +190,7 @@ public:
     /*
      * Returns true when tracing output is enabled, false otherwise.
      */
-    const bool get_trace();
+    bool get_trace();
 
     /*
      * Sets tracing output.
@@ -201,7 +201,7 @@ public:
      * Returns true if the graph data to be read by read_file(sting) are in
      * numeric form (e.g., integer values starting from zero) or in string form.
      */
-    const bool get_numeric();
+    bool get_numeric();
 
     /*
      * Specifies whether the graph data to be read by read_file(sting)
@@ -217,7 +217,7 @@ public:
      * where from and to are the two graph vertices (can be either strings or
      * integers) and delim is the delimiter.
      */
-    const string get_delim();
+    string get_delim();
 
     /*
      * Sets the delimited to be used for reading the graph data file.
@@ -234,18 +234,18 @@ public:
      * - the delimiter for separating the two vertices in each line of the
      *   input file (delim)
      */
-    const void print_params(ostream &out);
+    void print_params(ostream &out);
 
     /*
      * Outputs the hyperlink table.
      */
-    const void print_table();
+    void print_table();
 
     /*
      * Outputs the number of outgoing links for each vertex of the
      * hyperlink table.
      */
-    const void print_outgoing();
+    void print_outgoing();
 
     /*
      * Prints the pagerank vector to cout. The output format is a
@@ -254,12 +254,12 @@ public:
      * s = <sum> where <sum> is the sum of the pagerank values, which
      * should be equal to one.
      */
-    const void print_pagerank();
+    void print_pagerank();
 
     /*
      * Outputs the pageranks vector in a more verbose way than print_pagerank():
      * it substitutes string vertex names for numeric IDs, if available,
      * and also outputs the index number of each vector, starting from zero.
      */
-    const void print_pagerank_v();
+    void print_pagerank_v();
 };
