@@ -2,9 +2,9 @@ CFLAGS=-O3
 
 
 pagerank_test: pagerank_test.cpp table.cpp pagerank.cpp table.h
-	g++ $(CFLAGS) -o pagerank_test pagerank_test.cpp table.cpp
+	icpc -o pagerank_test pagerank_test.cpp table.cpp
 pagerank: pagerank.cpp table.cpp table.h
-	g++ $(CFLAGS) -Wall -o pagerank pagerank.cpp table.cpp 
+	icpc -Wall -o pagerank pagerank.cpp table.cpp 
 
 all-tests: all-tests.txt pagerank_test
 	./pagerank_test all-tests.txt

@@ -1,23 +1,23 @@
 /* Copyright (c) 2010-2011, Panos Louridas, GRNET S.A.
- 
+
    All rights reserved.
-  
+
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
    are met:
- 
+
    * Redistributions of source code must retain the above copyright
    notice, this list of conditions and the following disclaimer.
- 
+
    * Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the
    distribution.
- 
+
    * Neither the name of GRNET S.A, nor the names of its contributors
    may be used to endorse or promote products derived from this
    software without specific prior written permission.
-  
+
    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -182,7 +182,7 @@ int Table::read_file(const string &filename) {
     pair<map<string, size_t>::iterator, bool> ret;
 
     reset();
-    
+
     istream *infile;
 
     if (filename.empty()) {
@@ -193,7 +193,7 @@ int Table::read_file(const string &filename) {
           error("Cannot open file", filename.c_str());
       }
     }
-    
+
     size_t delim_len = delim.length();
     size_t linenum = 0;
     string line; // current line
@@ -239,7 +239,7 @@ int Table::read_file(const string &filename) {
         delete infile;
     }
     reserve(idx_to_nodes.size());
-    
+
     return 0;
 }
 
@@ -277,6 +277,7 @@ bool Table::add_arc(size_t from, size_t to) {
         }
     }
 
+    // CHANGE: rows to hold outgoing nodes.
     ret = insert_into_vector(rows[from], to);
 
     if (ret) {
@@ -304,11 +305,11 @@ void Table::pagerank() {
     size_t num_rows = rows.size();
 
     //cout << "rows: " << num_rows << endl;
-    
+
     if (num_rows == 0) {
         return;
     }
-    
+
     pr.resize(num_rows);
 
     pr[0] = 1;
@@ -318,15 +319,15 @@ void Table::pagerank() {
     }
 
 
-    
+
     while (diff > convergence && num_iterations < max_iterations) {
 
         sum_pr = 0;
         dangling_pr = 0;
-        
+
         int pr_size = pr.size();
-	#pragma omp parallel for reduction(+:sum_pr, dangling_pr)
-	#pragma ivdep
+	      #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
+	      #pragma ivdep
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -337,14 +338,16 @@ void Table::pagerank() {
 
         if (num_iterations == 0) {
             old_pr = pr;
-	    pr[0] = 0;
+
+            // CHANGE: pr starts with zeroes everywhere.
+	          pr[0] = 0;
         } else {
             /* Normalize so that we start with sum equal to one */
-	    #pragma omp parallel for
-	    #pragma ivdep
+	          #pragma omp parallel for
+	          #pragma ivdep
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
-		pr[i] = 0;
+		            pr[i] = 0;
             }
         }
 
@@ -353,7 +356,7 @@ void Table::pagerank() {
          * to one
          */
         sum_pr = 1;
-        
+
         /* An element of the A x I vector; all elements are identical */
         double one_Av = alpha * dangling_pr / num_rows;
 
@@ -362,35 +365,32 @@ void Table::pagerank() {
 
         /* The difference to be checked for convergence */
         int iii;
-	vector<size_t>::iterator to;
+        vector<size_t>::iterator to;
         double h;
-	// find how to do a parallel reduction here
+	      // TODO: find how to do a parallel reduction here
         for (i = 0; i < num_rows; i++) {
-          /* The corresponding element of the H multiplication */
+          // CHANGE: Reversed algorithm
           std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
           to = rows[i].begin();
-	  double from_pr = old_pr[i];
-	  #pragma ivdep
+          double from_pr = old_pr[i];
+          #pragma ivdep
           for (iii = 0; iii < ptr_diff; iii++) {
-	     double h_vv = 1.0 / ptr_diff;
-	     pr[*(to + iii)] += h_vv * from_pr;
+            double h_vv = 1.0 / ptr_diff;
+            pr[*(to + iii)] += h_vv * from_pr;
           }
-	}
+        }
 
         diff = 0;
-	#pragma omp parallel for
-	#pragma ivdep
+	      #pragma omp parallel for
+	      #pragma ivdep
         for (i = 0; i < num_rows; i++) {
-	    pr[i] *= alpha;
-            pr[i] += one_Av + one_Iv;
-            diff += fabs(pr[i] - old_pr[i]);
+          pr[i] *= alpha;
+          pr[i] += one_Av + one_Iv;
+          diff += fabs(pr[i] - old_pr[i]);
         }
 
         num_iterations++;
     }
-
-    cout << num_iterations << endl;
-    
 }
 
 void Table::print_params(ostream& out) {
@@ -436,7 +436,7 @@ void Table::print_pagerank() {
     double sum = 0;
 
     cout.precision(numeric_limits<double>::digits10);
-    
+
     cout << "(" << pr.size() << ") " << "[ ";
     for (cr = pr.begin(); cr != pr.end(); cr++) {
         cout << *cr << " ";
@@ -451,7 +451,7 @@ void Table::print_pagerank_v() {
     size_t i;
     size_t num_rows = pr.size();
     double sum = 0;
-    
+
     cout.precision(numeric_limits<double>::digits10);
 
     for (i = 0; i < num_rows; i++) {
