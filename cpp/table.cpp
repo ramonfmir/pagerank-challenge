@@ -304,8 +304,6 @@ void Table::pagerank() {
 
     size_t num_rows = rows.size();
 
-    //cout << "rows: " << num_rows << endl;
-
     if (num_rows == 0) {
         return;
     }
@@ -318,14 +316,14 @@ void Table::pagerank() {
         print_pagerank();
     }
 
-
-
     while (diff > convergence && num_iterations < max_iterations) {
 
         sum_pr = 0;
         dangling_pr = 0;
 
         int pr_size = pr.size();
+
+        // CHANGE: Vectorisation.
 	      #pragma ivdep
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
@@ -342,7 +340,8 @@ void Table::pagerank() {
 	          pr[0] = 0;
         } else {
             /* Normalize so that we start with sum equal to one */
-	          #pragma ivdep
+            // CHANGE: Vectorisation.
+            #pragma ivdep
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
 		            pr[i] = 0;
@@ -362,25 +361,28 @@ void Table::pagerank() {
         double one_Iv = (1 - alpha) * sum_pr / num_rows;
 
         /* The difference to be checked for convergence */
-        int iii;
-        vector<size_t>::iterator to;
-        double h;
+        vector<size_t>::iterator k;
+        double from_pr;
+        double h_vv;
+        std::ptrdiff_t ptr_diff;
 
-	      // TODO: find how to do a parallel reduction here
+        // CHANGE: Parallelised the loop.
+	      #pragma omp parallel for private(k, h_vv, ptr_diff, from_pr)
         for (i = 0; i < num_rows; i++) {
           // CHANGE: Reversed algorithm
-          std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
-          to = rows[i].begin();
-          double from_pr = old_pr[i];
+          from_pr = old_pr[i];
+          ptr_diff = rows[i].end() - rows[i].begin();
 
-          for (iii = 0; iii < ptr_diff; iii++) {
-            double h_vv = 1.0 / ptr_diff;
-            pr[*(to + iii)] += h_vv * from_pr;
+          for (k = rows[i].begin(); k < rows[i].end(); k++) {
+            h_vv = from_pr / ptr_diff;
+            #pragma omp atomic update
+            pr[*k] += h_vv;
           }
         }
 
         diff = 0;
 
+        // CHANGE: Vectorisation.
         #pragma ivdep
         for (i = 0; i < num_rows; i++) {
           pr[i] = pr[i] * alpha + one_Av + one_Iv;
