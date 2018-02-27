@@ -325,33 +325,23 @@ void Table::pagerank() {
         dangling_pr = 0;
         
         int pr_size = pr.size();
+	#pragma omp parallel for reduction(+:sum_pr, dangling_pr)
+	#pragma ivdep
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
-	    //cout << k << " " << cpr << endl;
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
-	        //cout << "dangling i " << k << endl;
                 dangling_pr += cpr;
             }
         }
-
-        //cout << "dangling pr " << dangling_pr << endl;
-	//if (fabs(sum_pr - 1) > 0.001) {
-	  //cout << num_iterations << endl;
-	  //cout << sum_pr << endl;
-	  //cout << alpha << endl;
-	  //cout << dangling_pr << endl;
-	  //break;
-	//}
-	//cout << dangling_pr << endl;
-
-	//cout << sum_pr << " sum!!" << endl;
 
         if (num_iterations == 0) {
             old_pr = pr;
 	    pr[0] = 0;
         } else {
             /* Normalize so that we start with sum equal to one */
+	    #pragma omp parallel for
+	    #pragma ivdep
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
 		pr[i] = 0;
@@ -374,28 +364,26 @@ void Table::pagerank() {
         int iii;
 	vector<size_t>::iterator to;
         double h;
+	// find how to do a parallel reduction here
         for (i = 0; i < num_rows; i++) {
           /* The corresponding element of the H multiplication */
           std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
           to = rows[i].begin();
 	  double from_pr = old_pr[i];
+	  #pragma ivdep
           for (iii = 0; iii < ptr_diff; iii++) {
 	     double h_vv = 1.0 / ptr_diff;
-	     //cout << "ptr_diff " << ptr_diff << "h_vv " << h_vv << endl;
-	     //cout << "from " << i << " to " << *(to + iii) << " howmuch " << h_vv * from_pr <<  endl;
 	     pr[*(to + iii)] += h_vv * from_pr;
           }
 	}
 
         diff = 0;
+	#pragma omp parallel for
+	#pragma ivdep
         for (i = 0; i < num_rows; i++) {
 	    pr[i] *= alpha;
             pr[i] += one_Av + one_Iv;
-            double d = fabs(pr[i] - old_pr[i]);
-	    //if (i == 2501) {
-	     // cout << "i: " << i << ", d: " << d << "num_out " << num_outgoing[i] << " " << pr[i] << " " << old_pr[i] <<  endl;
-	    //}
-            diff += d;
+            diff += fabs(pr[i] - old_pr[i]);
         }
 
         num_iterations++;
