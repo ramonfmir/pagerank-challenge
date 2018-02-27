@@ -1,2 +1,2 @@
-# pagerank-challenge
+# Pagerank Challenge
 Advanced Computer Architecture Coursework.

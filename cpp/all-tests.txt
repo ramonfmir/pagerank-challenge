@@ -5,8 +5,6 @@
 ../test/barabasi-60000
 ../test/barabasi-70000
 ../test/barabasi-80000
-../test/barabasi-90000
-../test/barabasi-100000
 ../test/erdos-10000
 ../test/erdos-20000
 ../test/erdos-30000
@@ -15,8 +13,6 @@
 ../test/erdos-60000
 ../test/erdos-70000
 ../test/erdos-80000
-../test/erdos-90000
-../test/erdos-100000
 ../test/bull
 ../test/chvatal
 ../test/coxeter

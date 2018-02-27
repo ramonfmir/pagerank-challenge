@@ -326,7 +326,6 @@ void Table::pagerank() {
         dangling_pr = 0;
 
         int pr_size = pr.size();
-	      #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
 	      #pragma ivdep
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
@@ -343,7 +342,6 @@ void Table::pagerank() {
 	          pr[0] = 0;
         } else {
             /* Normalize so that we start with sum equal to one */
-	          #pragma omp parallel for
 	          #pragma ivdep
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
@@ -367,13 +365,14 @@ void Table::pagerank() {
         int iii;
         vector<size_t>::iterator to;
         double h;
+
 	      // TODO: find how to do a parallel reduction here
         for (i = 0; i < num_rows; i++) {
           // CHANGE: Reversed algorithm
           std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
           to = rows[i].begin();
           double from_pr = old_pr[i];
-          #pragma ivdep
+
           for (iii = 0; iii < ptr_diff; iii++) {
             double h_vv = 1.0 / ptr_diff;
             pr[*(to + iii)] += h_vv * from_pr;
@@ -381,11 +380,10 @@ void Table::pagerank() {
         }
 
         diff = 0;
-	      #pragma omp parallel for
-	      #pragma ivdep
+
+        #pragma ivdep
         for (i = 0; i < num_rows; i++) {
-          pr[i] *= alpha;
-          pr[i] += one_Av + one_Iv;
+          pr[i] = pr[i] * alpha + one_Av + one_Iv;
           diff += fabs(pr[i] - old_pr[i]);
         }
 
