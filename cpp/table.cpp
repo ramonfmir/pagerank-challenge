@@ -277,7 +277,7 @@ bool Table::add_arc(size_t from, size_t to) {
         }
     }
 
-    ret = insert_into_vector(rows[to], from);
+    ret = insert_into_vector(rows[from], to);
 
     if (ret) {
         num_outgoing[from]++;
@@ -302,6 +302,8 @@ void Table::pagerank() {
     vector<double> old_pr;
 
     size_t num_rows = rows.size();
+
+    //cout << "rows: " << num_rows << endl;
     
     if (num_rows == 0) {
         return;
@@ -314,6 +316,8 @@ void Table::pagerank() {
     if (trace) {
         print_pagerank();
     }
+
+
     
     while (diff > convergence && num_iterations < max_iterations) {
 
@@ -321,24 +325,36 @@ void Table::pagerank() {
         dangling_pr = 0;
         
         int pr_size = pr.size();
-        #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
-        #pragma ivdep
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
+	    //cout << k << " " << cpr << endl;
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
+	        //cout << "dangling i " << k << endl;
                 dangling_pr += cpr;
             }
         }
 
+        //cout << "dangling pr " << dangling_pr << endl;
+	//if (fabs(sum_pr - 1) > 0.001) {
+	  //cout << num_iterations << endl;
+	  //cout << sum_pr << endl;
+	  //cout << alpha << endl;
+	  //cout << dangling_pr << endl;
+	  //break;
+	//}
+	//cout << dangling_pr << endl;
+
+	//cout << sum_pr << " sum!!" << endl;
+
         if (num_iterations == 0) {
             old_pr = pr;
+	    pr[0] = 0;
         } else {
             /* Normalize so that we start with sum equal to one */
-            #pragma omp parallel for
-            #pragma ivdep
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
+		pr[i] = 0;
             }
         }
 
@@ -355,44 +371,37 @@ void Table::pagerank() {
         double one_Iv = (1 - alpha) * sum_pr / num_rows;
 
         /* The difference to be checked for convergence */
-        diff = 0;
-        int threads = 1;
-        int block = num_rows / threads;
         int iii;
+	vector<size_t>::iterator to;
         double h;
-        #pragma omp parallel for private(i, ci, iii, h) reduction(+: diff)
         for (i = 0; i < num_rows; i++) {
-          //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
-            /* The corresponding element of the H multiplication */
-            h = 0.0;
-            std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
-            ci = rows[i].begin();
-            #pragma ivdep
-            for (iii = 0; iii < ptr_diff; iii++) {
-                /* The current element of the H vector */
-                int outgoing = num_outgoing[*(ci + iii)];
-                double h_v = (outgoing)
-                    ? 1.0 / outgoing
-                    : 0.0;
-                //if (num_iterations == 0 && trace) {
-                //    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
-                //}
-                h += h_v * old_pr[*(ci + iii)];
-            }
-            h *= alpha;
-            pr[i] = h + one_Av + one_Iv;
-            diff += fabs(pr[i] - old_pr[i]);
-          //}
+          /* The corresponding element of the H multiplication */
+          std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
+          to = rows[i].begin();
+	  double from_pr = old_pr[i];
+          for (iii = 0; iii < ptr_diff; iii++) {
+	     double h_vv = 1.0 / ptr_diff;
+	     //cout << "ptr_diff " << ptr_diff << "h_vv " << h_vv << endl;
+	     //cout << "from " << i << " to " << *(to + iii) << " howmuch " << h_vv * from_pr <<  endl;
+	     pr[*(to + iii)] += h_vv * from_pr;
+          }
+	}
+
+        diff = 0;
+        for (i = 0; i < num_rows; i++) {
+	    pr[i] *= alpha;
+            pr[i] += one_Av + one_Iv;
+            double d = fabs(pr[i] - old_pr[i]);
+	    //if (i == 2501) {
+	     // cout << "i: " << i << ", d: " << d << "num_out " << num_outgoing[i] << " " << pr[i] << " " << old_pr[i] <<  endl;
+	    //}
+            diff += d;
         }
 
-
-
         num_iterations++;
-        //if (trace) {
-        //    cout << num_iterations << ": ";
-        //    print_pagerank();
-        //}
     }
+
+    cout << num_iterations << endl;
     
 }
 
