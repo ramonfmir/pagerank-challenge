@@ -318,13 +318,10 @@ void Table::pagerank() {
         print_pagerank();
     }
 
-    //int num_dangling = 0;
-
     while (diff > convergence && num_iterations < max_iterations) {
 
         sum_pr = 0;
         dangling_pr = 0;
-        //num_dangling = 0;
 
         int pr_size = pr.size();
 
@@ -334,7 +331,6 @@ void Table::pagerank() {
             double cpr = pr[k];
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
-                //num_dangling++;
                 dangling_pr += cpr;
             }
         }
@@ -371,20 +367,18 @@ void Table::pagerank() {
         double from_pr;
         double h_vv;
         std::ptrdiff_t ptr_diff;
-        //std::map<size_t, double> buffer;
         int buffer_size = 0;
-        int buff_max_size = 80;
+        int buffer_max_size = 80;
 
-        //int written = 0;
+        diff = 0;
 
         // CHANGE: Parallelised the loop.
-        // num_threads(4)
-        diff = 0;
-	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) reduction(+:diff)  num_threads(8)
+	      #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) \
+                             reduction(+: diff) \
+                             num_threads(4)
         {
-        double diff_t = 0;
-        vector<size_t> to_buff(buff_max_size);
-        vector<double> val_buff(buff_max_size);
+          vector<size_t> key_buff(buffer_max_size);
+          vector<double> val_buff(buffer_max_size);
           #pragma omp for nowait
           for (i = 0; i < num_rows; i++) {
             // CHANGE: Reversed algorithm
@@ -393,46 +387,39 @@ void Table::pagerank() {
 
             for (k = rows[i].begin(); k < rows[i].end(); k++) {
               h_vv = from_pr / ptr_diff;
-              to_buff[buffer_size] = *k;
+              // CHANGE: First write to buffer.
+              key_buff[buffer_size] = *k;
               val_buff[buffer_size] = h_vv;
               buffer_size++;
             }
 
-            if (buffer_size >= (buff_max_size - 20)) {
+            if (buffer_size >= (buffer_max_size - 20)) {
               for (int l = 0; l < buffer_size; l++) {
-                  int first = to_buff[l];
-                  double second = val_buff[l];
-              #pragma omp atomic update
-                pr[first] += second;
+                size_t key = key_buff[l];
+                double val = val_buff[l];
+                #pragma omp atomic update
+                pr[key] += val;
               }
               buffer_size = 0;
             }
           }
 
           // Cleanup buffers.
-          //#pragma omp for
           for (int l = 0; l < buffer_size; l++) {
-                  int first = to_buff[l];
-                  double second = val_buff[l];
-              #pragma omp atomic update
-                pr[first] += second;
+            size_t key = key_buff[l];
+            double val = val_buff[l];
+            #pragma omp atomic update
+            pr[key] += val;
           }
-              buffer_size = 0;
+          buffer_size = 0;
 
-
-        //diff = 0;
-
-        // CHANGE: Vectorisation.
-#pragma omp barrier
-//#pragma omp single
-//        {
-        #pragma omp for reduction(+: diff_t)
-        for (i = 0; i < num_rows; i++) {
-          pr[i] = pr[i] * alpha + one_Av + one_Iv;
-          diff_t += fabs(pr[i] - old_pr[i]);
-        }
-
-        diff += diff_t;
+          // CHANGE: for reduction.
+          #pragma omp barrier
+          #pragma omp for
+          for (i = 0; i < num_rows; i++) {
+            pr[i] = pr[i] * alpha + one_Av + one_Iv;
+            diff += fabs(pr[i] - old_pr[i]);
+          }
         }
 
         num_iterations++;
