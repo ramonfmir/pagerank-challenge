@@ -329,7 +329,7 @@ void Table::pagerank() {
         int pr_size = pr.size();
 
         // CHANGE: Vectorisation.
-	      #pragma ivdep
+	      #pragma omp simd
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -347,7 +347,7 @@ void Table::pagerank() {
         } else {
             /* Normalize so that we start with sum equal to one */
             // CHANGE: Vectorisation.
-            #pragma ivdep
+            #pragma omp simd
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
 		            pr[i] = 0;
@@ -379,8 +379,9 @@ void Table::pagerank() {
 
         // CHANGE: Parallelised the loop.
         // num_threads(4)
-	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr)
+	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) num_threads(8)
         {
+        //double diff_t = 0;
         vector<size_t> to_buff(buff_max_size);
         vector<double> val_buff(buff_max_size);
           #pragma omp for nowait
@@ -408,23 +409,29 @@ void Table::pagerank() {
           }
 
           // Cleanup buffers.
+          //#pragma omp for
           for (int l = 0; l < buffer_size; l++) {
                   int first = to_buff[l];
                   double second = val_buff[l];
               #pragma omp atomic update
                 pr[first] += second;
-              }
+          }
               buffer_size = 0;
-        }
 
 
-        diff = 0;
 
         // CHANGE: Vectorisation.
-        #pragma ivdep
+#pragma omp barrier
+#pragma omp single
+        {
+        diff = 0;
         for (i = 0; i < num_rows; i++) {
           pr[i] = pr[i] * alpha + one_Av + one_Iv;
           diff += fabs(pr[i] - old_pr[i]);
+        }
+        }
+
+        //diff += diff_t;
         }
 
         num_iterations++;
