@@ -318,10 +318,13 @@ void Table::pagerank() {
         print_pagerank();
     }
 
+    //int num_dangling = 0;
+
     while (diff > convergence && num_iterations < max_iterations) {
 
         sum_pr = 0;
         dangling_pr = 0;
+        //num_dangling = 0;
 
         int pr_size = pr.size();
 
@@ -331,6 +334,7 @@ void Table::pagerank() {
             double cpr = pr[k];
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
+                //num_dangling++;
                 dangling_pr += cpr;
             }
         }
@@ -367,12 +371,19 @@ void Table::pagerank() {
         double from_pr;
         double h_vv;
         std::ptrdiff_t ptr_diff;
+        //std::map<size_t, double> buffer;
+        int buffer_size = 0;
+        int buff_max_size = 80;
+
+        //int written = 0;
 
         // CHANGE: Parallelised the loop.
-	      #pragma omp parallel private(k, h_vv, ptr_diff, from_pr) num_threads(4)
+        // num_threads(4)
+	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr)
         {
-          std::map<size_t, double> buffer;
-          #pragma omp for
+        vector<size_t> to_buff(buff_max_size);
+        vector<double> val_buff(buff_max_size);
+          #pragma omp for nowait
           for (i = 0; i < num_rows; i++) {
             // CHANGE: Reversed algorithm
             from_pr = old_pr[i];
@@ -380,32 +391,32 @@ void Table::pagerank() {
 
             for (k = rows[i].begin(); k < rows[i].end(); k++) {
               h_vv = from_pr / ptr_diff;
-              //#pragma omp atomic update
-              //pr[*k] += h_vv;
-              buffer.insert(pair <size_t, double> (*k, h_vv));
+              to_buff[buffer_size] = *k;
+              val_buff[buffer_size] = h_vv;
+              buffer_size++;
             }
 
-            if (buffer.size() > 50) {
-              #pragma omp critical
-              {
-              std::map<size_t, double>::iterator it;
-              for (it = buffer.begin(); it != buffer.end(); it++) {
-                pr[it->first] += it->second;
+            if (buffer_size >= (buff_max_size - 20)) {
+              for (int l = 0; l < buffer_size; l++) {
+                  int first = to_buff[l];
+                  double second = val_buff[l];
+              #pragma omp atomic update
+                pr[first] += second;
               }
-              buffer.clear();
-              }
+              buffer_size = 0;
             }
           }
 
           // Cleanup buffers.
-          #pragma omp critical
-          {
-            std::map<size_t, double>::iterator it;
-            for (it = buffer.begin(); it != buffer.end(); it++) {
-              pr[it->first] += it->second;
-            }
-          }
+          for (int l = 0; l < buffer_size; l++) {
+                  int first = to_buff[l];
+                  double second = val_buff[l];
+              #pragma omp atomic update
+                pr[first] += second;
+              }
+              buffer_size = 0;
         }
+
 
         diff = 0;
 
