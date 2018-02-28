@@ -46,6 +46,8 @@
 
 #include "table.h"
 
+#include <omp.h>
+
 void Table::reset() {
     num_outgoing.clear();
     rows.clear();
@@ -361,22 +363,47 @@ void Table::pagerank() {
         double one_Iv = (1 - alpha) * sum_pr / num_rows;
 
         /* The difference to be checked for convergence */
-        vector<size_t>::iterator k;
+        std::vector<size_t>::iterator k;
         double from_pr;
         double h_vv;
         std::ptrdiff_t ptr_diff;
 
         // CHANGE: Parallelised the loop.
-	      #pragma omp parallel for private(k, h_vv, ptr_diff, from_pr)
-        for (i = 0; i < num_rows; i++) {
-          // CHANGE: Reversed algorithm
-          from_pr = old_pr[i];
-          ptr_diff = rows[i].end() - rows[i].begin();
+	      #pragma omp parallel private(k, h_vv, ptr_diff, from_pr) num_threads(4)
+        {
+          std::map<size_t, double> buffer;
+          #pragma omp for
+          for (i = 0; i < num_rows; i++) {
+            // CHANGE: Reversed algorithm
+            from_pr = old_pr[i];
+            ptr_diff = rows[i].end() - rows[i].begin();
 
-          for (k = rows[i].begin(); k < rows[i].end(); k++) {
-            h_vv = from_pr / ptr_diff;
-            #pragma omp atomic update
-            pr[*k] += h_vv;
+            for (k = rows[i].begin(); k < rows[i].end(); k++) {
+              h_vv = from_pr / ptr_diff;
+              //#pragma omp atomic update
+              //pr[*k] += h_vv;
+              buffer.insert(pair <size_t, double> (*k, h_vv));
+            }
+
+            if (buffer.size() > 50) {
+              #pragma omp critical
+              {
+              std::map<size_t, double>::iterator it;
+              for (it = buffer.begin(); it != buffer.end(); it++) {
+                pr[it->first] += it->second;
+              }
+              buffer.clear();
+              }
+            }
+          }
+
+          // Cleanup buffers.
+          #pragma omp critical
+          {
+            std::map<size_t, double>::iterator it;
+            for (it = buffer.begin(); it != buffer.end(); it++) {
+              pr[it->first] += it->second;
+            }
           }
         }
 
