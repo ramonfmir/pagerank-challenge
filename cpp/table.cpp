@@ -326,7 +326,7 @@ void Table::pagerank() {
         }
 #pragma omp barrier
         
-        #pragma omp for reduction(+:sum_pr, dangling_pr) simd
+        #pragma omp for simd reduction(+:sum_pr, dangling_pr)
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -363,7 +363,7 @@ void Table::pagerank() {
         int block = num_rows / threads;
         int iii;
         double h;
-        #pragma omp for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 10000)
+        #pragma omp for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 5000)
         for (i = 0; i < num_rows; i++) {
           //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
             /* The corresponding element of the H multiplication */
