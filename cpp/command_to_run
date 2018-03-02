@@ -1,1 +1,1 @@
-icpc -qopenmp -qopt-report=5 -qopt-report-routine=pagerank -qopt-report-phase=vec,par,loop,openmp -O3 -o pagerank_test pagerank_test.cpp table.cpp
+icpc -march=core-avx2 -qopenmp -xHost -qopt-report=5 -qopt-report-routine=pagerank -qopt-report-phase=vec,par,loop,openmp -O3 -o pagerank_test pagerank_test.cpp table.cpp

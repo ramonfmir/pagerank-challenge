@@ -262,15 +262,8 @@ bool Table::add_arc(size_t from, size_t to) {
 
     bool ret = false;
     size_t max_dim = max(from, to);
-    if (trace) {
-        cout << "checking to add " << from << " => " << to << endl;
-    }
     if (rows.size() <= max_dim) {
         max_dim = max_dim + 1;
-        if (trace) {
-            cout << "resizing rows from " << rows.size() << " to "
-                 << max_dim << endl;
-        }
         rows.resize(max_dim);
         if (num_outgoing.size() <= max_dim) {
             num_outgoing.resize(max_dim);
@@ -281,9 +274,6 @@ bool Table::add_arc(size_t from, size_t to) {
 
     if (ret) {
         num_outgoing[from]++;
-        if (trace) {
-            cout << "added " << from << " => " << to << endl;
-        }
     }
 
     return ret;
@@ -298,7 +288,6 @@ void Table::pagerank() {
     double sum_pr; // sum of current pagerank vector elements
     double dangling_pr; // sum of current pagerank vector elements for dangling
     			// nodes
-    unsigned long num_iterations = 0;
     vector<double> old_pr;
 
     size_t num_rows = rows.size();
@@ -311,13 +300,10 @@ void Table::pagerank() {
 
     pr[0] = 1;
 
-    if (trace) {
-        print_pagerank();
-    }
-    
     int pr_size = pr.size();
-#pragma omp parallel shared(dangling_pr, sum_pr, diff)
+#pragma omp parallel shared(dangling_pr, sum_pr, diff) private(i)
 {
+    unsigned long num_iterations = 0;
     while (true) {
 #pragma omp single
         {
@@ -326,7 +312,7 @@ void Table::pagerank() {
         }
 #pragma omp barrier
         
-        #pragma omp for simd reduction(+:sum_pr, dangling_pr)
+        #pragma omp for reduction(+:sum_pr, dangling_pr)
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -363,7 +349,7 @@ void Table::pagerank() {
         int block = num_rows / threads;
         int iii;
         double h;
-        #pragma omp for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 5000)
+        #pragma omp for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 10000)
         for (i = 0; i < num_rows; i++) {
           //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
             /* The corresponding element of the H multiplication */
