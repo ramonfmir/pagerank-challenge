@@ -329,7 +329,7 @@ void Table::pagerank() {
         int pr_size = pr.size();
 
         // CHANGE: Vectorisation.
-	      #pragma omp simd
+	      #pragma omp for simd
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -347,7 +347,7 @@ void Table::pagerank() {
         } else {
             /* Normalize so that we start with sum equal to one */
             // CHANGE: Vectorisation.
-            #pragma omp simd
+            #pragma omp for simd
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
 		            pr[i] = 0;
@@ -380,7 +380,7 @@ void Table::pagerank() {
         // CHANGE: Parallelised the loop.
         // num_threads(4)
         diff = 0;
-	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) reduction(+:diff)  num_threads(8)
+	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) reduction(+:diff)  num_threads(4)
         {
         vector<size_t> to_buff(buff_max_size);
         vector<double> val_buff(buff_max_size);
