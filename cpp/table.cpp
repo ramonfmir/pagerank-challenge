@@ -326,8 +326,7 @@ void Table::pagerank() {
         }
 #pragma omp barrier
         
-        #pragma omp for reduction(+:sum_pr, dangling_pr)
-        #pragma ivdep
+        #pragma omp for reduction(+:sum_pr, dangling_pr) simd
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -340,8 +339,7 @@ void Table::pagerank() {
             old_pr = pr;
         } else {
             /* Normalize so that we start with sum equal to one */
-            #pragma omp for
-            #pragma ivdep
+            #pragma omp for simd
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
             }
