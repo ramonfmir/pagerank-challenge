@@ -360,7 +360,7 @@ void Table::pagerank() {
         int block = num_rows / threads;
         int iii;
         double h;
-        #pragma omp parallel for private(i, ci, iii, h) reduction(+: diff)
+        #pragma omp parallel for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 10000)
         for (i = 0; i < num_rows; i++) {
           //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
             /* The corresponding element of the H multiplication */
@@ -374,9 +374,6 @@ void Table::pagerank() {
                 double h_v = (outgoing)
                     ? 1.0 / outgoing
                     : 0.0;
-                //if (num_iterations == 0 && trace) {
-                //    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
-                //}
                 h += h_v * old_pr[*(ci + iii)];
             }
             h *= alpha;
@@ -388,10 +385,6 @@ void Table::pagerank() {
 
 
         num_iterations++;
-        //if (trace) {
-        //    cout << num_iterations << ": ";
-        //    print_pagerank();
-        //}
     }
     
 }
