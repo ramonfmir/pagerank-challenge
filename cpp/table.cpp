@@ -382,7 +382,6 @@ void Table::pagerank() {
         diff = 0;
 	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) reduction(+:diff)  num_threads(8)
         {
-        double diff_t = 0;
         vector<size_t> to_buff(buff_max_size);
         vector<double> val_buff(buff_max_size);
           #pragma omp for nowait
@@ -426,13 +425,12 @@ void Table::pagerank() {
 #pragma omp barrier
 //#pragma omp single
 //        {
-        #pragma omp for reduction(+: diff_t)
+        #pragma omp for
         for (i = 0; i < num_rows; i++) {
           pr[i] = pr[i] * alpha + one_Av + one_Iv;
-          diff_t += fabs(pr[i] - old_pr[i]);
+          diff += fabs(pr[i] - old_pr[i]);
         }
 
-        diff += diff_t;
         }
 
         num_iterations++;
