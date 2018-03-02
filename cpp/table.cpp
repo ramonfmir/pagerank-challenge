@@ -315,13 +315,18 @@ void Table::pagerank() {
         print_pagerank();
     }
     
-    while (diff > convergence && num_iterations < max_iterations) {
-
+    int pr_size = pr.size();
+#pragma omp parallel shared(dangling_pr, sum_pr, diff)
+{
+    while (true) {
+#pragma omp single
+        {
         sum_pr = 0;
         dangling_pr = 0;
+        }
+#pragma omp barrier
         
-        int pr_size = pr.size();
-        #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
+        #pragma omp for reduction(+:sum_pr, dangling_pr)
         #pragma ivdep
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
@@ -335,7 +340,7 @@ void Table::pagerank() {
             old_pr = pr;
         } else {
             /* Normalize so that we start with sum equal to one */
-            #pragma omp parallel for
+            #pragma omp for
             #pragma ivdep
             for (i = 0; i < pr_size; i++) {
                 old_pr[i] = pr[i] / sum_pr;
@@ -360,7 +365,7 @@ void Table::pagerank() {
         int block = num_rows / threads;
         int iii;
         double h;
-        #pragma omp parallel for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 10000)
+        #pragma omp for private(i, ci, iii, h) reduction(+: diff) schedule(dynamic, 10000)
         for (i = 0; i < num_rows; i++) {
           //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
             /* The corresponding element of the H multiplication */
@@ -383,9 +388,13 @@ void Table::pagerank() {
         }
 
 
+        if (diff <= convergence || num_iterations >= max_iterations) {
+            break;
+        }
 
         num_iterations++;
-    }
+    } //end while
+} // end parallel section
     
 }
 
