@@ -1,23 +1,23 @@
 /* Copyright (c) 2010-2011, Panos Louridas, GRNET S.A.
- 
+
    All rights reserved.
-  
+
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
    are met:
- 
+
    * Redistributions of source code must retain the above copyright
    notice, this list of conditions and the following disclaimer.
- 
+
    * Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the
    distribution.
- 
+
    * Neither the name of GRNET S.A, nor the names of its contributors
    may be used to endorse or promote products derived from this
    software without specific prior written permission.
-  
+
    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -45,6 +45,8 @@
 #include <cstddef>
 
 #include "table.h"
+
+#include <omp.h>
 
 void Table::reset() {
     num_outgoing.clear();
@@ -182,7 +184,7 @@ int Table::read_file(const string &filename) {
     pair<map<string, size_t>::iterator, bool> ret;
 
     reset();
-    
+
     istream *infile;
 
     if (filename.empty()) {
@@ -193,7 +195,7 @@ int Table::read_file(const string &filename) {
           error("Cannot open file", filename.c_str());
       }
     }
-    
+
     size_t delim_len = delim.length();
     size_t linenum = 0;
     string line; // current line
@@ -239,7 +241,7 @@ int Table::read_file(const string &filename) {
         delete infile;
     }
     reserve(idx_to_nodes.size());
-    
+
     return 0;
 }
 
@@ -277,7 +279,8 @@ bool Table::add_arc(size_t from, size_t to) {
         }
     }
 
-    ret = insert_into_vector(rows[to], from);
+    // CHANGE: rows to hold outgoing nodes.
+    ret = insert_into_vector(rows[from], to);
 
     if (ret) {
         num_outgoing[from]++;
@@ -302,27 +305,29 @@ void Table::pagerank() {
     vector<double> old_pr;
 
     size_t num_rows = rows.size();
-    
+
     if (num_rows == 0) {
         return;
     }
-    
+
     pr.resize(num_rows);
 
+    //Change, not done in loop, makes first run less efficient
+    old_pr = pr;
     pr[0] = 1;
 
-    if (trace) {
-        print_pagerank();
-    }
-    
+    //int num_dangling = 0;
+
     while (diff > convergence && num_iterations < max_iterations) {
 
         sum_pr = 0;
         dangling_pr = 0;
-        
+        //num_dangling = 0;
+
         int pr_size = pr.size();
-        #pragma omp parallel for reduction(+:sum_pr, dangling_pr)
-        #pragma ivdep
+
+        // CHANGE: Vectorisation.
+	      #pragma omp for simd
         for (size_t k = 0; k < pr_size; k++) {
             double cpr = pr[k];
             sum_pr += cpr;
@@ -331,23 +336,20 @@ void Table::pagerank() {
             }
         }
 
-        if (num_iterations == 0) {
-            old_pr = pr;
-        } else {
             /* Normalize so that we start with sum equal to one */
-            #pragma omp parallel for
-            #pragma ivdep
+            // CHANGE: Vectorisation.
+            #pragma omp for simd
             for (i = 0; i < pr_size; i++) {
-                old_pr[i] = pr[i] / sum_pr;
+                old_pr[i] = pr[i];
+		            pr[i] = 0;
             }
-        }
 
         /*
          * After normalisation the elements of the pagerank vector sum
          * to one
          */
         sum_pr = 1;
-        
+
         /* An element of the A x I vector; all elements are identical */
         double one_Av = alpha * dangling_pr / num_rows;
 
@@ -355,45 +357,76 @@ void Table::pagerank() {
         double one_Iv = (1 - alpha) * sum_pr / num_rows;
 
         /* The difference to be checked for convergence */
+        std::vector<size_t>::iterator k;
+        double from_pr;
+        double h_vv;
+        std::ptrdiff_t ptr_diff;
+        //std::map<size_t, double> buffer;
+        int buffer_size = 0;
+        int buff_max_size = 80;
+
+        //int written = 0;
+
+        // CHANGE: Parallelised the loop.
+        // num_threads(4)
         diff = 0;
-        int threads = 1;
-        int block = num_rows / threads;
-        int iii;
-        double h;
-        #pragma omp parallel for private(i, ci, iii, h) reduction(+: diff)
-        for (i = 0; i < num_rows; i++) {
-          //for (i = ii; (i < ii + block) && (i < num_rows); i++) {
-            /* The corresponding element of the H multiplication */
-            h = 0.0;
-            std::ptrdiff_t ptr_diff = rows[i].end() - rows[i].begin();
-            ci = rows[i].begin();
-            #pragma ivdep
-            for (iii = 0; iii < ptr_diff; iii++) {
-                /* The current element of the H vector */
-                int outgoing = num_outgoing[*(ci + iii)];
-                double h_v = (outgoing)
-                    ? 1.0 / outgoing
-                    : 0.0;
-                //if (num_iterations == 0 && trace) {
-                //    cout << "h[" << i << "," << *ci << "]=" << h_v << endl;
-                //}
-                h += h_v * old_pr[*(ci + iii)];
+	     #pragma omp parallel private(buffer_size, k, h_vv, ptr_diff, from_pr) reduction(+:diff)  num_threads(4)
+        {
+        vector<size_t> to_buff(buff_max_size);
+        vector<double> val_buff(buff_max_size);
+          #pragma omp for schedule(dynamic, 20000)
+          for (i = 0; i < num_rows; i++) {
+            // CHANGE: Reversed algorithm
+            from_pr = old_pr[i];
+            ptr_diff = rows[i].size();
+
+            for (k = rows[i].begin(); k < rows[i].end(); k++) {
+              h_vv = from_pr / ptr_diff;
+              to_buff[buffer_size] = *k;
+              val_buff[buffer_size] = h_vv;
+              buffer_size++;
             }
-            h *= alpha;
-            pr[i] = h + one_Av + one_Iv;
-            diff += fabs(pr[i] - old_pr[i]);
-          //}
+
+          #pragma ivdep
+            if (buffer_size >= (buff_max_size - 20)) {
+              for (int l = 0; l < buffer_size; l++) {
+                  int first = to_buff[l];
+                  double second = val_buff[l];
+              #pragma omp atomic update
+                pr[first] += second;
+              }
+              buffer_size = 0;
+            }
+          }
+
+          // Cleanup buffers.
+          #pragma ivdep
+          for (int l = 0; l < buffer_size; l++) {
+                  int first = to_buff[l];
+                  double second = val_buff[l];
+              #pragma omp atomic update
+                pr[first] += second;
+          }
+              buffer_size = 0;
+
+
+        //diff = 0;
+
+        // CHANGE: Vectorisation.
+//#pragma omp single
+        #pragma omp for
+#pragma ivdep
+        for (i = 0; i < num_rows; i++) {
+          pr[i] = pr[i] * alpha + one_Av + one_Iv;
+          diff += fabs(pr[i] - old_pr[i]);
         }
 
 
+        }
 
         num_iterations++;
-        //if (trace) {
-        //    cout << num_iterations << ": ";
-        //    print_pagerank();
-        //}
+#pragma omp barrier
     }
-    
 }
 
 void Table::print_params(ostream& out) {
@@ -439,7 +472,7 @@ void Table::print_pagerank() {
     double sum = 0;
 
     cout.precision(numeric_limits<double>::digits10);
-    
+
     cout << "(" << pr.size() << ") " << "[ ";
     for (cr = pr.begin(); cr != pr.end(); cr++) {
         cout << *cr << " ";
@@ -454,7 +487,7 @@ void Table::print_pagerank_v() {
     size_t i;
     size_t num_rows = pr.size();
     double sum = 0;
-    
+
     cout.precision(numeric_limits<double>::digits10);
 
     for (i = 0; i < num_rows; i++) {
