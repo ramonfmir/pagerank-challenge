@@ -312,11 +312,9 @@ void Table::pagerank() {
 
     pr.resize(num_rows);
 
+    //Change, not done in loop, makes first run less efficient
+    old_pr = pr;
     pr[0] = 1;
-
-    if (trace) {
-        print_pagerank();
-    }
 
     //int num_dangling = 0;
 
@@ -334,25 +332,17 @@ void Table::pagerank() {
             double cpr = pr[k];
             sum_pr += cpr;
             if (num_outgoing[k] == 0) {
-                //num_dangling++;
                 dangling_pr += cpr;
             }
         }
 
-        if (num_iterations == 0) {
-            old_pr = pr;
-
-            // CHANGE: pr starts with zeroes everywhere.
-	          pr[0] = 0;
-        } else {
             /* Normalize so that we start with sum equal to one */
             // CHANGE: Vectorisation.
             #pragma omp for simd
             for (i = 0; i < pr_size; i++) {
-                old_pr[i] = pr[i] / sum_pr;
+                old_pr[i] = pr[i];
 		            pr[i] = 0;
             }
-        }
 
         /*
          * After normalisation the elements of the pagerank vector sum
@@ -384,11 +374,11 @@ void Table::pagerank() {
         {
         vector<size_t> to_buff(buff_max_size);
         vector<double> val_buff(buff_max_size);
-          #pragma omp for nowait
+          #pragma omp for schedule(dynamic, 20000)
           for (i = 0; i < num_rows; i++) {
             // CHANGE: Reversed algorithm
             from_pr = old_pr[i];
-            ptr_diff = rows[i].end() - rows[i].begin();
+            ptr_diff = rows[i].size();
 
             for (k = rows[i].begin(); k < rows[i].end(); k++) {
               h_vv = from_pr / ptr_diff;
@@ -397,6 +387,7 @@ void Table::pagerank() {
               buffer_size++;
             }
 
+          #pragma ivdep
             if (buffer_size >= (buff_max_size - 20)) {
               for (int l = 0; l < buffer_size; l++) {
                   int first = to_buff[l];
@@ -409,7 +400,7 @@ void Table::pagerank() {
           }
 
           // Cleanup buffers.
-          //#pragma omp for
+          #pragma ivdep
           for (int l = 0; l < buffer_size; l++) {
                   int first = to_buff[l];
                   double second = val_buff[l];
@@ -422,18 +413,19 @@ void Table::pagerank() {
         //diff = 0;
 
         // CHANGE: Vectorisation.
-#pragma omp barrier
 //#pragma omp single
-//        {
         #pragma omp for
+#pragma ivdep
         for (i = 0; i < num_rows; i++) {
           pr[i] = pr[i] * alpha + one_Av + one_Iv;
           diff += fabs(pr[i] - old_pr[i]);
         }
 
+
         }
 
         num_iterations++;
+#pragma omp barrier
     }
 }
 
